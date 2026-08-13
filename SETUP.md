@@ -2,23 +2,24 @@
 
 ## 1. Google Cloud OAuth 클라이언트 발급 (직접 해야 하는 단계)
 
+Google이 2024년에 "OAuth 동의 화면"을 **"Google Auth Platform"**으로 개편해서, 지금은 Branding / Audience / Clients / Data Access 4개 탭 구조야. 아래는 현재(2026) 기준 순서.
+
 1. https://console.cloud.google.com 접속 → 새 프로젝트 생성 (예: `jarvis-assistant`)
-2. 좌측 메뉴 "API 및 서비스" → "라이브러리"에서 아래 두 API를 각각 검색해서 **사용 설정**:
+2. 좌측 메뉴 "APIs & Services" → "Library"에서 아래 두 API를 각각 검색해서 **Enable**:
    - Google Calendar API
    - Gmail API
-3. "API 및 서비스" → "OAuth 동의 화면"
-   - User Type: **외부(External)** 선택 (개인 Gmail 계정 3개 다 외부 취급됨)
-   - 앱 이름/이메일 등 기본 정보만 입력하고 저장
-   - "테스트 사용자" 단계에서 아래 3개 이메일을 전부 추가:
+3. "APIs & Services" → **"Google Auth Platform"** (예전 "OAuth consent screen") → 처음이면 "Get started" 마법사가 뜸
+   - User Type: **External** 선택 — ⚠️ 나중에 못 바꾸니 꼭 External로. (개인 Gmail 계정 3개는 전부 외부 취급됨)
+   - 앱 이름/지원 이메일 등 기본 정보 입력
+   - **Audience 탭**에서 Test users 섹션에 아래 3개 이메일 전부 추가:
      - donggyu.main@gmail.com
      - donggyu.biz@gmail.com
      - bang2brew@gmail.com
-   - **게시 상태는 "테스트"로 계속 둬도 됨** — 구글 심사(verification) 안 받아도 본인 계정끼리는 문제없이 계속 씀 (심사 안 받으면 리프레시 토큰이 7일마다 만료된다는 루머가 있는데, 테스트 사용자로 등록된 계정은 예외라 무기한 사용 가능)
-4. "사용자 인증 정보" → "사용자 인증 정보 만들기" → "OAuth 클라이언트 ID"
-   - 애플리케이션 유형: **웹 애플리케이션**
-   - 승인된 리디렉션 URI에 아래 추가 (배포 후 실제 Vercel 도메인으로):
-     `https://<your-vercel-domain>/api/auth/google/callback`
-   - 생성되면 **클라이언트 ID**와 **클라이언트 보안 비밀**이 발급됨 → 아래 3번의 env 변수에 사용
+   - **게시 상태는 "Testing"으로 계속 둬도 됨** — 구글 심사(verification) 안 받아도 테스트 사용자로 등록된 계정끼리는 무기한 정상 동작함
+4. **Clients 탭** → "Create Client" → 애플리케이션 유형: **Web application**
+   - Authorized redirect URIs에 추가 (⚠️ Vercel의 **프리뷰용 해시 URL이 아니라 고정 프로덕션 도메인**으로 — Vercel 프로젝트의 Domains 탭에서 확인):
+     `https://<고정 프로덕션 도메인>/api/auth/google/callback`
+   - 생성되면 **Client ID**와 **Client secret**이 발급됨 → 아래 3번의 env 변수에 사용
 
 ## 2. Supabase 값 확인
 

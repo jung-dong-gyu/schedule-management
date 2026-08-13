@@ -7,7 +7,10 @@ import { google } from "googleapis";
 // look up which email just authorized us, and upsert it into google_accounts.
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
-  const label = request.nextUrl.searchParams.get("state") ?? "기타";
+  const stateParam = request.nextUrl.searchParams.get("state");
+  const label = stateParam
+    ? Buffer.from(stateParam, "base64url").toString("utf-8")
+    : "기타";
 
   if (!code) {
     return NextResponse.redirect(new URL("/settings?error=missing_code", request.url));

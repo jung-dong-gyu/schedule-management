@@ -18,13 +18,16 @@ export function getOAuthClient() {
 
 // `label` (통합/업무/개인/취미/기타) is round-tripped through the OAuth `state`
 // param so the callback knows how to tag the account being connected.
+// Google's auth server errors out (generic 500) on non-ASCII bytes in `state`,
+// so we base64url-encode it here and decode it back in the callback — Google
+// only ever sees an opaque ASCII token, never the raw Korean text.
 export function getGoogleAuthUrl(label: string) {
   const client = getOAuthClient();
   return client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent", // forces a refresh_token every time, even on reconnect
     scope: GOOGLE_SCOPES,
-    state: label,
+    state: Buffer.from(label, "utf-8").toString("base64url"),
   });
 }
 
