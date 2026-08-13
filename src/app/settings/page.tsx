@@ -10,7 +10,7 @@ const LABELS = ["통합", "업무", "개인", "취미", "기타"];
 
 export default function SettingsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [label, setLabel] = useState("업무");
+  const [label, setLabel] = useState("통합");
   const [loading, setLoading] = useState(true);
 
   async function load() {
@@ -37,10 +37,10 @@ export default function SettingsPage() {
   return (
     <div>
       <NavBar />
-      <main className="mx-auto max-w-2xl px-4 py-8">
+      <main className="mx-auto max-w-2xl px-3 py-6 sm:px-4 sm:py-8">
         <h1 className="mb-6 text-lg font-semibold">설정 — 구글 계정</h1>
 
-        <div className="mb-6 flex items-center gap-2">
+        <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-center">
           <select
             value={label}
             onChange={(e) => setLabel(e.target.value)}
@@ -54,7 +54,7 @@ export default function SettingsPage() {
           </select>
           <a
             href={`/api/auth/google/connect?label=${encodeURIComponent(label)}`}
-            className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white"
+            className="rounded-lg bg-gray-900 px-4 py-2 text-center text-sm font-medium text-white"
           >
             + 구글 계정 연결
           </a>
@@ -69,11 +69,11 @@ export default function SettingsPage() {
             {accounts.map((a) => (
               <div
                 key={a.email}
-                className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-4 py-3"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-4 py-3"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex min-w-0 items-center gap-3">
                   <CategoryBadge label={a.label} />
-                  <span className="text-sm">{a.email}</span>
+                  <span className="truncate text-sm">{a.email}</span>
                 </div>
                 <button onClick={() => disconnect(a.email)} className="text-xs text-red-500">
                   연결 해제

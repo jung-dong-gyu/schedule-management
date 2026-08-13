@@ -33,10 +33,10 @@ export default function MailPage() {
   return (
     <div>
       <NavBar />
-      <main className="mx-auto max-w-2xl px-4 py-8">
+      <main className="mx-auto max-w-2xl px-3 py-6 sm:px-4 sm:py-8">
         <h1 className="mb-4 text-lg font-semibold">메일 (읽기 전용)</h1>
 
-        <div className="mb-4 flex gap-2">
+        <div className="mb-4 flex flex-wrap gap-2">
           {labels.map((l) => (
             <button
               key={l}
@@ -58,7 +58,7 @@ export default function MailPage() {
           <div className="space-y-2">
             {visible.map((e) => (
               <div key={`${e.accountEmail}-${e.id}`} className="rounded-xl border border-gray-200 bg-white px-4 py-3">
-                <div className="mb-1 flex items-center justify-between">
+                <div className="mb-1 flex flex-wrap items-center justify-between gap-1">
                   <span className={`text-sm ${e.unread ? "font-semibold" : ""}`}>{e.subject}</span>
                   <CategoryBadge label={e.accountLabel} />
                 </div>

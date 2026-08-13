@@ -6,6 +6,8 @@ export type TaggedEvent = {
   accountEmail: string;
   accountLabel: string;
   title: string;
+  description?: string | null;
+  location?: string | null;
   start: string | null | undefined;
   end: string | null | undefined;
   allDay: boolean;
@@ -37,6 +39,8 @@ export async function listEventsAcrossAccounts(timeMin: string, timeMax: string)
         accountEmail: account.email,
         accountLabel: account.label,
         title: event.summary ?? "(제목 없음)",
+        description: event.description ?? null,
+        location: event.location ?? null,
         start: event.start?.dateTime ?? event.start?.date,
         end: event.end?.dateTime ?? event.end?.date,
         allDay: !event.start?.dateTime,
@@ -51,7 +55,14 @@ export async function listEventsAcrossAccounts(timeMin: string, timeMax: string)
 
 export async function createEventOnAccount(
   email: string,
-  event: { summary: string; description?: string; start: string; end: string; allDay?: boolean }
+  event: {
+    summary: string;
+    description?: string;
+    location?: string;
+    start: string;
+    end: string;
+    allDay?: boolean;
+  }
 ) {
   const authClient = await getAuthorizedClientForAccount(email);
   const calendar = google.calendar({ version: "v3", auth: authClient });
@@ -60,12 +71,14 @@ export async function createEventOnAccount(
     ? {
         summary: event.summary,
         description: event.description,
+        location: event.location,
         start: { date: event.start },
         end: { date: event.end },
       }
     : {
         summary: event.summary,
         description: event.description,
+        location: event.location,
         start: { dateTime: event.start },
         end: { dateTime: event.end },
       };
@@ -77,14 +90,22 @@ export async function createEventOnAccount(
 export async function updateEventOnAccount(
   email: string,
   eventId: string,
-  patch: Partial<{ summary: string; description: string; start: string; end: string; allDay: boolean }>
+  patch: Partial<{
+    summary: string;
+    description: string;
+    location: string;
+    start: string;
+    end: string;
+    allDay: boolean;
+  }>
 ) {
   const authClient = await getAuthorizedClientForAccount(email);
   const calendar = google.calendar({ version: "v3", auth: authClient });
 
   const body: Record<string, unknown> = {};
   if (patch.summary) body.summary = patch.summary;
-  if (patch.description) body.description = patch.description;
+  if (patch.description !== undefined) body.description = patch.description;
+  if (patch.location !== undefined) body.location = patch.location;
   if (patch.start) body.start = patch.allDay ? { date: patch.start } : { dateTime: patch.start };
   if (patch.end) body.end = patch.allDay ? { date: patch.end } : { dateTime: patch.end };
 

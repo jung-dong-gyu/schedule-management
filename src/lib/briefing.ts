@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { listEventsAcrossAccounts, type TaggedEvent } from "@/lib/google/calendar";
 
-const CATEGORIES = ["업무", "개인", "취미", "건강", "재정", "학습", "관계"] as const;
+const CATEGORIES = ["개인", "업무", "취미", "건강", "재정", "학습", "관계"] as const;
 
 // Single-user app: there is exactly one Supabase Auth user (정동규).
 // Cron routes have no session, so we look the user up via the admin client.
