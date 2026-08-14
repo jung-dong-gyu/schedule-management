@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 
 const links = [
   { href: "/", label: "홈" },
+  { href: "/todos", label: "할 일" },
   { href: "/calendar", label: "일정" },
   { href: "/routines", label: "루틴" },
   { href: "/mail", label: "메일" },

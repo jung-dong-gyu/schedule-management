@@ -81,13 +81,26 @@ function PriorityTag({ priority }: { priority: string | null }) {
   return <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${tag.className}`}>{tag.label}</span>;
 }
 
-export default function TodoSection({ todayOnly = false }: { todayOnly?: boolean }) {
+export default function TodoSection({
+  todayOnly = false,
+  fixedDate,
+}: {
+  todayOnly?: boolean;
+  fixedDate?: string;
+}) {
+  // `lockedDate` set → this section only shows/creates items for exactly that
+  // date, and the date field in the add form is hidden (fixed to it) rather
+  // than editable. Used for the home "오늘의 할 일" section (todayOnly) and
+  // for the '할 일' 탭's per-day view (fixedDate).
+  const lockedDate = fixedDate ?? (todayOnly ? todayStr() : undefined);
+
   const [todos, setTodos] = useState<Todo[]>([]);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("개인");
   const [priority, setPriority] = useState("보통");
   const [dueDate, setDueDate] = useState("");
   const [dueTime, setDueTime] = useState("");
+  const [notes, setNotes] = useState("");
   const [filter, setFilter] = useState("전체");
   const [loading, setLoading] = useState(true);
 
@@ -131,9 +144,12 @@ export default function TodoSection({ todayOnly = false }: { todayOnly?: boolean
     load();
   }, []);
 
+  const effectiveDueDate = lockedDate ?? dueDate;
+  const canAddTodo = Boolean(title.trim() && category && priority && effectiveDueDate && dueTime);
+
   async function addTodo(e: React.FormEvent) {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!canAddTodo) return;
     await fetch("/api/todos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -141,14 +157,16 @@ export default function TodoSection({ todayOnly = false }: { todayOnly?: boolean
         title,
         category,
         priority,
-        due_date: dueDate || null,
-        due_time: dueTime || null,
+        due_date: effectiveDueDate,
+        due_time: dueTime,
+        notes: notes || null,
       }),
     });
     setTitle("");
     setDueDate("");
     setDueTime("");
     setPriority("보통");
+    setNotes("");
     load();
   }
 
@@ -254,9 +272,19 @@ export default function TodoSection({ todayOnly = false }: { todayOnly?: boolean
     setRoutineDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
   }
 
+  const canSubmitRoutine = Boolean(
+    routineTitle.trim() &&
+      routineCategory &&
+      routinePriority &&
+      routineDueTime &&
+      routineDays.length > 0 &&
+      routineStart &&
+      routineEnd
+  );
+
   async function submitRoutine(e: React.FormEvent) {
     e.preventDefault();
-    if (!routineTitle.trim() || routineDays.length === 0 || !routineStart || !routineEnd) return;
+    if (!canSubmitRoutine) return;
 
     setRoutineBusy(true);
     setRoutineMessage("");
@@ -290,18 +318,20 @@ export default function TodoSection({ todayOnly = false }: { todayOnly?: boolean
     }
   }
 
-  const scoped = todayOnly ? todos.filter((t) => t.due_date === todayStr()) : todos;
+  const scoped = lockedDate ? todos.filter((t) => t.due_date === lockedDate) : todos;
 
   const labels = useMemo(
     () => ["전체", ...Array.from(new Set(scoped.map((t) => t.category).filter(Boolean) as string[]))],
     [scoped]
   );
   const filtered = filter === "전체" ? scoped : scoped.filter((t) => t.category === filter);
-  const visible = todayOnly ? [...filtered].sort(compareTodos) : filtered;
+  const visible = lockedDate ? [...filtered].sort(compareTodos) : filtered;
+
+  const heading = todayOnly ? "오늘의 할 일" : lockedDate ? `${lockedDate} 할 일` : "할 일";
 
   return (
     <section>
-      <h2 className="mb-3 text-sm font-medium text-gray-500">{todayOnly ? "오늘의 할 일" : "할 일"}</h2>
+      <h2 className="mb-3 text-sm font-medium text-gray-500">{heading}</h2>
 
       <form onSubmit={addTodo} className="mb-3 flex flex-col gap-2">
         <input
@@ -333,26 +363,39 @@ export default function TodoSection({ todayOnly = false }: { todayOnly?: boolean
               </option>
             ))}
           </select>
-          <input
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm sm:flex-none"
-          />
+          {lockedDate ? (
+            <span className="flex items-center rounded-lg bg-gray-100 px-2 py-2 text-sm text-gray-500">
+              {lockedDate}
+            </span>
+          ) : (
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm sm:flex-none"
+            />
+          )}
           <input
             type="time"
             value={dueTime}
             onChange={(e) => setDueTime(e.target.value)}
-            title="시간대 (비우면 종일)"
             className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm sm:flex-none"
           />
-          <button
-            type="submit"
-            className="shrink-0 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white"
-          >
-            추가
-          </button>
         </div>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder="메모 (선택, 인지해야 할 내용/컨텍스트 등)"
+          rows={2}
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+        />
+        <button
+          type="submit"
+          disabled={!canAddTodo}
+          className="self-start rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+        >
+          추가
+        </button>
       </form>
 
       <div className="mb-4">
@@ -403,7 +446,6 @@ export default function TodoSection({ todayOnly = false }: { todayOnly?: boolean
                 type="time"
                 value={routineDueTime}
                 onChange={(e) => setRoutineDueTime(e.target.value)}
-                title="시간대 (비우면 종일)"
                 className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm sm:flex-none"
               />
             </div>
@@ -472,8 +514,8 @@ export default function TodoSection({ todayOnly = false }: { todayOnly?: boolean
             <div className="flex items-center gap-3">
               <button
                 type="submit"
-                disabled={routineBusy}
-                className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                disabled={routineBusy || !canSubmitRoutine}
+                className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
               >
                 {routineBusy ? "생성 중..." : "일괄 생성"}
               </button>
