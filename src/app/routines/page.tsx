@@ -59,6 +59,16 @@ function toEditForm(r: Routine): EditForm {
   };
 }
 
+const emptyCreateForm: EditForm = {
+  title: "",
+  category: "개인",
+  priority: "보통",
+  dueTime: "",
+  days: [],
+  startDate: todayStr(),
+  endDate: "",
+};
+
 export default function RoutinesPage() {
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +76,11 @@ export default function RoutinesPage() {
   const [form, setForm] = useState<EditForm | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState<EditForm>(emptyCreateForm);
+  const [createBusy, setCreateBusy] = useState(false);
+  const [createMessage, setCreateMessage] = useState("");
 
   async function load() {
     const res = await fetch("/api/routines");
@@ -77,6 +92,55 @@ export default function RoutinesPage() {
   useEffect(() => {
     load();
   }, []);
+
+  function toggleCreateDay(day: string) {
+    setCreateForm((f) => ({
+      ...f,
+      days: f.days.includes(day) ? f.days.filter((d) => d !== day) : [...f.days, day],
+    }));
+  }
+
+  const canSubmitCreate = Boolean(
+    createForm.title.trim() &&
+      createForm.category &&
+      createForm.priority &&
+      createForm.dueTime &&
+      createForm.days.length > 0 &&
+      createForm.startDate &&
+      createForm.endDate
+  );
+
+  async function submitCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSubmitCreate) return;
+    setCreateBusy(true);
+    setCreateMessage("");
+    try {
+      const res = await fetch("/api/todos/routine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: createForm.title,
+          category: createForm.category,
+          priority: createForm.priority,
+          dueTime: createForm.dueTime,
+          days: createForm.days,
+          startDate: createForm.startDate,
+          endDate: createForm.endDate,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCreateMessage(data.error ?? "생성에 실패했어요");
+        return;
+      }
+      setCreateMessage(`${data.count}개의 할 일이 생성됐어요`);
+      setCreateForm(emptyCreateForm);
+      await load();
+    } finally {
+      setCreateBusy(false);
+    }
+  }
 
   function openEdit(r: Routine) {
     setEditingId(r.id);
@@ -137,13 +201,145 @@ export default function RoutinesPage() {
     <div>
       <NavBar />
       <main className="mx-auto max-w-2xl px-3 py-6 sm:px-4 sm:py-8">
-        <h1 className="mb-6 text-lg font-semibold">루틴</h1>
+        <h1 className="mb-4 text-lg font-semibold">루틴</h1>
+
+        <div className="mb-6">
+          <button
+            onClick={() => setShowCreate((v) => !v)}
+            className="text-xs text-gray-500 underline underline-offset-2"
+          >
+            {showCreate ? "접기" : "+ 새 루틴 만들기"}
+          </button>
+
+          {showCreate && (
+            <form
+              onSubmit={submitCreate}
+              className="mt-2 space-y-3 rounded-xl border border-gray-200 bg-white p-4"
+            >
+              <input
+                value={createForm.title}
+                onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
+                placeholder="반복할 할 일 제목"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+
+              <div className="flex flex-wrap gap-2">
+                <select
+                  value={createForm.category}
+                  onChange={(e) => setCreateForm({ ...createForm, category: e.target.value })}
+                  className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm sm:flex-none"
+                >
+                  {CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={createForm.priority}
+                  onChange={(e) => setCreateForm({ ...createForm, priority: e.target.value })}
+                  className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm sm:flex-none"
+                >
+                  {PRIORITIES.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="time"
+                  value={createForm.dueTime}
+                  onChange={(e) => setCreateForm({ ...createForm, dueTime: e.target.value })}
+                  className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm sm:flex-none"
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                {WEEKDAYS.map((day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => toggleCreateDay(day)}
+                    className={`h-8 w-8 rounded-full text-xs ${
+                      createForm.days.includes(day) ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {day}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <label className="flex items-center gap-2 text-xs text-gray-500">
+                  시작일
+                  <input
+                    type="date"
+                    value={createForm.startDate}
+                    min={todayStr()}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setCreateForm({
+                        ...createForm,
+                        startDate: v,
+                        endDate: createForm.endDate && createForm.endDate < v ? v : createForm.endDate,
+                      });
+                    }}
+                    className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-xs text-gray-500">
+                  종료일
+                  <input
+                    type="date"
+                    value={createForm.endDate}
+                    min={createForm.startDate || todayStr()}
+                    onChange={(e) => setCreateForm({ ...createForm, endDate: e.target.value })}
+                    className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm"
+                  />
+                </label>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { label: "1개월", months: 1 },
+                  { label: "3개월", months: 3 },
+                  { label: "12개월", months: 12 },
+                ].map((opt) => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={() =>
+                      setCreateForm({
+                        ...createForm,
+                        endDate: addMonths(createForm.startDate || todayStr(), opt.months),
+                      })
+                    }
+                    className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600"
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={createBusy || !canSubmitCreate}
+                  className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+                >
+                  {createBusy ? "생성 중..." : "일괄 생성"}
+                </button>
+                {createMessage && <span className="text-xs text-gray-500">{createMessage}</span>}
+              </div>
+            </form>
+          )}
+        </div>
 
         {loading ? (
           <p className="text-sm text-gray-400">불러오는 중...</p>
         ) : routines.length === 0 ? (
           <p className="text-sm text-gray-400">
-            아직 만든 루틴이 없어요. 홈 화면의 &quot;+ 루틴으로 일괄 추가&quot;에서 만들 수 있어요.
+            아직 만든 루틴이 없어요. 위 &quot;+ 새 루틴 만들기&quot;에서 만들 수 있어요.
           </p>
         ) : (
           <div className="space-y-3">

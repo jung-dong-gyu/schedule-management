@@ -45,6 +45,24 @@ function toDateTimeLocal(iso?: string | null) {
   return iso.slice(0, 16);
 }
 
+// Given a "YYYY-MM-DDTHH:mm" datetime-local value, returns the same format
+// one hour later (rolls over day/month/year correctly). Used so picking a
+// start time auto-fills a sensible default end time.
+function addHour(dateTimeLocal: string) {
+  if (!dateTimeLocal) return dateTimeLocal;
+  const [datePart, timePart] = dateTimeLocal.split("T");
+  const [y, m, d] = datePart.split("-").map(Number);
+  const [hh, mm] = timePart.split(":").map(Number);
+  const dt = new Date(y, m - 1, d, hh, mm);
+  dt.setHours(dt.getHours() + 1);
+  const yy = dt.getFullYear();
+  const mo = String(dt.getMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getDate()).padStart(2, "0");
+  const HH = String(dt.getHours()).padStart(2, "0");
+  const MI = String(dt.getMinutes()).padStart(2, "0");
+  return `${yy}-${mo}-${dd}T${HH}:${MI}`;
+}
+
 function nextDay(dateStr: string) {
   // Manually add a day to the "YYYY-MM-DD" string without going through
   // toISOString (which converts to UTC and would shift the date near
@@ -275,7 +293,10 @@ export default function CalendarPage() {
                 <input
                   type="datetime-local"
                   value={form.startDateTime}
-                  onChange={(e) => setForm({ ...form, startDateTime: e.target.value })}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setForm({ ...form, startDateTime: v, endDateTime: addHour(v) });
+                  }}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                   required
                 />
