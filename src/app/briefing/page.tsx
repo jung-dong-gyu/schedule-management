@@ -70,7 +70,7 @@ function BriefingSection({ title, briefing }: { title: string; briefing?: Briefi
             ))}
             {group.todos.map((t) => (
               <div key={t.id} className="py-1 text-sm">
-                ✅ {t.title} {t.due_date ? `(마감 ${t.due_date})` : ""} {t.priority === "높음" ? "🔴" : ""}
+                ✅ {t.title} {t.due_date ? `(마감 ${t.due_date})` : ""} {t.priority === "긴급" ? "🔴" : ""}
               </div>
             ))}
           </div>

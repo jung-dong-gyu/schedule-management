@@ -7,14 +7,23 @@ type Todo = {
   id: string;
   title: string;
   category: string | null;
-  priority: string | null;
+  priority: string | null; // 긴급 / 보통 / 여유
   due_date: string | null;
+  due_time: string | null; // "HH:MM:SS" or null (종일)
   is_completed: boolean;
   notes: string | null;
+  source: string; // "common" | "routine"
 };
 
 const CATEGORIES = ["개인", "업무", "취미", "건강", "재정", "학습", "관계"];
 const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
+const PRIORITIES = ["긴급", "보통", "여유"];
+
+const PRIORITY_TAG: Record<string, { label: string; className: string }> = {
+  긴급: { label: "High", className: "bg-red-100 text-red-700" },
+  보통: { label: "Middle", className: "bg-green-100 text-green-700" },
+  여유: { label: "Low", className: "bg-blue-100 text-blue-700" },
+};
 
 function todayStr() {
   const now = new Date();
@@ -24,11 +33,46 @@ function todayStr() {
   return `${y}-${m}-${d}`;
 }
 
-export default function TodoSection() {
+function addMonths(dateStr: string, months: number) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const date = new Date(y, m - 1 + months, d);
+  const yy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+function timeLabel(t: string | null) {
+  if (!t) return "종일";
+  return t.slice(0, 5);
+}
+
+function SourceTag({ source }: { source: string }) {
+  const isRoutine = source === "routine";
+  return (
+    <span
+      className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+        isRoutine ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-500"
+      }`}
+    >
+      {isRoutine ? "Routine" : "Common"}
+    </span>
+  );
+}
+
+function PriorityTag({ priority }: { priority: string | null }) {
+  const tag = priority ? PRIORITY_TAG[priority] : undefined;
+  if (!tag) return null;
+  return <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${tag.className}`}>{tag.label}</span>;
+}
+
+export default function TodoSection({ todayOnly = false }: { todayOnly?: boolean }) {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState("개인");
+  const [priority, setPriority] = useState("보통");
   const [dueDate, setDueDate] = useState("");
+  const [dueTime, setDueTime] = useState("");
   const [filter, setFilter] = useState("전체");
   const [loading, setLoading] = useState(true);
 
@@ -38,14 +82,26 @@ export default function TodoSection() {
   const [actionDate, setActionDate] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
 
+  // 항목 수정
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    category: "개인",
+    priority: "보통",
+    due_time: "",
+    notes: "",
+  });
+  const [editBusy, setEditBusy] = useState(false);
+
   // 루틴(반복) 일괄 생성 폼
   const [showRoutine, setShowRoutine] = useState(false);
   const [routineTitle, setRoutineTitle] = useState("");
   const [routineCategory, setRoutineCategory] = useState("개인");
+  const [routinePriority, setRoutinePriority] = useState("보통");
+  const [routineDueTime, setRoutineDueTime] = useState("");
   const [routineDays, setRoutineDays] = useState<string[]>([]);
   const [routineStart, setRoutineStart] = useState(todayStr());
   const [routineEnd, setRoutineEnd] = useState("");
-  const [routineNotes, setRoutineNotes] = useState("");
   const [routineBusy, setRoutineBusy] = useState(false);
   const [routineMessage, setRoutineMessage] = useState("");
 
@@ -66,10 +122,18 @@ export default function TodoSection() {
     await fetch("/api/todos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, category, due_date: dueDate || null }),
+      body: JSON.stringify({
+        title,
+        category,
+        priority,
+        due_date: dueDate || null,
+        due_time: dueTime || null,
+      }),
     });
     setTitle("");
     setDueDate("");
+    setDueTime("");
+    setPriority("보통");
     load();
   }
 
@@ -121,7 +185,9 @@ export default function TodoSection() {
           body: JSON.stringify({
             title: todo.title,
             category: todo.category,
+            priority: todo.priority,
             due_date: actionDate,
+            due_time: todo.due_time,
             notes: todo.notes,
           }),
         });
@@ -130,6 +196,42 @@ export default function TodoSection() {
       await load();
     } finally {
       setActionBusy(false);
+    }
+  }
+
+  function openEdit(todo: Todo) {
+    setEditingId(todo.id);
+    setEditForm({
+      title: todo.title,
+      category: todo.category ?? "개인",
+      priority: todo.priority ?? "보통",
+      due_time: todo.due_time ? todo.due_time.slice(0, 5) : "",
+      notes: todo.notes ?? "",
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+  }
+
+  async function saveEdit(id: string) {
+    setEditBusy(true);
+    try {
+      await fetch(`/api/todos/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: editForm.title,
+          category: editForm.category,
+          priority: editForm.priority,
+          due_time: editForm.due_time || null,
+          notes: editForm.notes || null,
+        }),
+      });
+      setEditingId(null);
+      await load();
+    } finally {
+      setEditBusy(false);
     }
   }
 
@@ -150,7 +252,8 @@ export default function TodoSection() {
         body: JSON.stringify({
           title: routineTitle,
           category: routineCategory,
-          notes: routineNotes || null,
+          priority: routinePriority,
+          dueTime: routineDueTime || null,
           days: routineDays,
           startDate: routineStart,
           endDate: routineEnd,
@@ -164,31 +267,34 @@ export default function TodoSection() {
       setRoutineMessage(`${data.count}개의 할 일이 생성됐어요`);
       setRoutineTitle("");
       setRoutineDays([]);
-      setRoutineNotes("");
+      setRoutinePriority("보통");
+      setRoutineDueTime("");
       await load();
     } finally {
       setRoutineBusy(false);
     }
   }
 
+  const scoped = todayOnly ? todos.filter((t) => t.due_date === todayStr()) : todos;
+
   const labels = useMemo(
-    () => ["전체", ...Array.from(new Set(todos.map((t) => t.category).filter(Boolean) as string[]))],
-    [todos]
+    () => ["전체", ...Array.from(new Set(scoped.map((t) => t.category).filter(Boolean) as string[]))],
+    [scoped]
   );
-  const visible = filter === "전체" ? todos : todos.filter((t) => t.category === filter);
+  const visible = filter === "전체" ? scoped : scoped.filter((t) => t.category === filter);
 
   return (
     <section>
-      <h2 className="mb-3 text-sm font-medium text-gray-500">할 일</h2>
+      <h2 className="mb-3 text-sm font-medium text-gray-500">{todayOnly ? "오늘의 할 일" : "할 일"}</h2>
 
-      <form onSubmit={addTodo} className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+      <form onSubmit={addTodo} className="mb-3 flex flex-col gap-2">
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="새 할 일"
-          className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
         />
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <select
             value={category}
             onChange={(e) => setCategory(e.target.value)}
@@ -200,10 +306,28 @@ export default function TodoSection() {
               </option>
             ))}
           </select>
+          <select
+            value={priority}
+            onChange={(e) => setPriority(e.target.value)}
+            className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm sm:flex-none"
+          >
+            {PRIORITIES.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
           <input
             type="date"
             value={dueDate}
             onChange={(e) => setDueDate(e.target.value)}
+            className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm sm:flex-none"
+          />
+          <input
+            type="time"
+            value={dueTime}
+            onChange={(e) => setDueTime(e.target.value)}
+            title="시간대 (비우면 종일)"
             className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm sm:flex-none"
           />
           <button
@@ -236,17 +360,37 @@ export default function TodoSection() {
               required
             />
 
-            <select
-              value={routineCategory}
-              onChange={(e) => setRoutineCategory(e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm sm:w-auto"
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+            <div className="flex flex-wrap gap-2">
+              <select
+                value={routineCategory}
+                onChange={(e) => setRoutineCategory(e.target.value)}
+                className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm sm:flex-none"
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={routinePriority}
+                onChange={(e) => setRoutinePriority(e.target.value)}
+                className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm sm:flex-none"
+              >
+                {PRIORITIES.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="time"
+                value={routineDueTime}
+                onChange={(e) => setRoutineDueTime(e.target.value)}
+                title="시간대 (비우면 종일)"
+                className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm sm:flex-none"
+              />
+            </div>
 
             <div className="flex flex-wrap gap-1.5">
               {WEEKDAYS.map((day) => (
@@ -269,7 +413,12 @@ export default function TodoSection() {
                 <input
                   type="date"
                   value={routineStart}
-                  onChange={(e) => setRoutineStart(e.target.value)}
+                  min={todayStr()}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setRoutineStart(v);
+                    if (routineEnd && routineEnd < v) setRoutineEnd(v);
+                  }}
                   className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm"
                   required
                 />
@@ -279,6 +428,7 @@ export default function TodoSection() {
                 <input
                   type="date"
                   value={routineEnd}
+                  min={routineStart || todayStr()}
                   onChange={(e) => setRoutineEnd(e.target.value)}
                   className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm"
                   required
@@ -286,13 +436,22 @@ export default function TodoSection() {
               </label>
             </div>
 
-            <textarea
-              value={routineNotes}
-              onChange={(e) => setRoutineNotes(e.target.value)}
-              placeholder="메모 (선택, 생성되는 모든 항목에 동일하게 적용)"
-              rows={2}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-            />
+            <div className="flex flex-wrap gap-2">
+              {[
+                { label: "1개월", months: 1 },
+                { label: "3개월", months: 3 },
+                { label: "12개월", months: 12 },
+              ].map((opt) => (
+                <button
+                  key={opt.label}
+                  type="button"
+                  onClick={() => setRoutineEnd(addMonths(routineStart || todayStr(), opt.months))}
+                  className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
 
             <div className="flex items-center gap-3">
               <button
@@ -333,18 +492,25 @@ export default function TodoSection() {
           {visible.map((t) => (
             <div key={t.id} className="rounded-xl border border-gray-200 bg-white px-4 py-3">
               <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-3">
+                <div className="flex min-w-0 items-center gap-2">
                   <input
                     type="checkbox"
                     checked={t.is_completed}
                     onChange={() => toggle(t)}
                     className="shrink-0"
                   />
+                  <SourceTag source={t.source} />
                   <div className="min-w-0">
-                    <div className={`truncate text-sm ${t.is_completed ? "text-gray-400 line-through" : ""}`}>
-                      {t.title}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={`truncate text-sm ${t.is_completed ? "text-gray-400 line-through" : ""}`}>
+                        {t.title}
+                      </span>
+                      <PriorityTag priority={t.priority} />
                     </div>
-                    {t.due_date && <div className="text-xs text-gray-400">마감 {t.due_date}</div>}
+                    <div className="text-xs text-gray-400">
+                      {timeLabel(t.due_time)}
+                      {t.due_date ? ` · 마감 ${t.due_date}` : ""}
+                    </div>
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
@@ -359,6 +525,9 @@ export default function TodoSection() {
                       한 번 더하기
                     </button>
                   )}
+                  <button onClick={() => openEdit(t)} className="text-xs text-gray-500">
+                    수정
+                  </button>
                   <button onClick={() => remove(t.id)} className="text-xs text-red-500">
                     삭제
                   </button>
@@ -387,6 +556,70 @@ export default function TodoSection() {
                     취소
                   </button>
                 </div>
+              )}
+
+              {editingId === t.id && (
+                <div className="mt-2 space-y-2 border-t border-gray-100 pt-2">
+                  <input
+                    value={editForm.title}
+                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <select
+                      value={editForm.category}
+                      onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                      className="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-xs sm:flex-none"
+                    >
+                      {CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={editForm.priority}
+                      onChange={(e) => setEditForm({ ...editForm, priority: e.target.value })}
+                      className="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-xs sm:flex-none"
+                    >
+                      {PRIORITIES.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="time"
+                      value={editForm.due_time}
+                      onChange={(e) => setEditForm({ ...editForm, due_time: e.target.value })}
+                      title="시간대 (비우면 종일)"
+                      className="flex-1 rounded-lg border border-gray-300 px-2 py-1.5 text-xs sm:flex-none"
+                    />
+                  </div>
+                  <textarea
+                    value={editForm.notes}
+                    onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                    placeholder="메모 (인지해야 할 내용, 컨텍스트 등)"
+                    rows={2}
+                    className="w-full rounded-lg border border-gray-300 px-2 py-1.5 text-xs"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => saveEdit(t.id)}
+                      disabled={editBusy}
+                      className="rounded-lg bg-gray-900 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+                    >
+                      저장
+                    </button>
+                    <button onClick={cancelEdit} className="text-xs text-gray-400">
+                      취소
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {editingId !== t.id && t.notes && (
+                <div className="mt-2 border-t border-gray-100 pt-2 text-xs text-gray-500">{t.notes}</div>
               )}
             </div>
           ))}
