@@ -14,6 +14,7 @@ type Todo = {
 };
 
 const CATEGORIES = ["개인", "업무", "취미", "건강", "재정", "학습", "관계"];
+const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
 
 function todayStr() {
   const now = new Date();
@@ -36,6 +37,17 @@ export default function TodoSection() {
   const [action, setAction] = useState<{ id: string; mode: "move" | "copy" } | null>(null);
   const [actionDate, setActionDate] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
+
+  // 루틴(반복) 일괄 생성 폼
+  const [showRoutine, setShowRoutine] = useState(false);
+  const [routineTitle, setRoutineTitle] = useState("");
+  const [routineCategory, setRoutineCategory] = useState("개인");
+  const [routineDays, setRoutineDays] = useState<string[]>([]);
+  const [routineStart, setRoutineStart] = useState(todayStr());
+  const [routineEnd, setRoutineEnd] = useState("");
+  const [routineNotes, setRoutineNotes] = useState("");
+  const [routineBusy, setRoutineBusy] = useState(false);
+  const [routineMessage, setRoutineMessage] = useState("");
 
   async function load() {
     const res = await fetch("/api/todos");
@@ -121,6 +133,44 @@ export default function TodoSection() {
     }
   }
 
+  function toggleRoutineDay(day: string) {
+    setRoutineDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]));
+  }
+
+  async function submitRoutine(e: React.FormEvent) {
+    e.preventDefault();
+    if (!routineTitle.trim() || routineDays.length === 0 || !routineStart || !routineEnd) return;
+
+    setRoutineBusy(true);
+    setRoutineMessage("");
+    try {
+      const res = await fetch("/api/todos/routine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: routineTitle,
+          category: routineCategory,
+          notes: routineNotes || null,
+          days: routineDays,
+          startDate: routineStart,
+          endDate: routineEnd,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setRoutineMessage(data.error ?? "생성에 실패했어요");
+        return;
+      }
+      setRoutineMessage(`${data.count}개의 할 일이 생성됐어요`);
+      setRoutineTitle("");
+      setRoutineDays([]);
+      setRoutineNotes("");
+      await load();
+    } finally {
+      setRoutineBusy(false);
+    }
+  }
+
   const labels = useMemo(
     () => ["전체", ...Array.from(new Set(todos.map((t) => t.category).filter(Boolean) as string[]))],
     [todos]
@@ -164,6 +214,99 @@ export default function TodoSection() {
           </button>
         </div>
       </form>
+
+      <div className="mb-4">
+        <button
+          onClick={() => setShowRoutine((v) => !v)}
+          className="text-xs text-gray-500 underline underline-offset-2"
+        >
+          {showRoutine ? "루틴 접기" : "+ 루틴으로 일괄 추가"}
+        </button>
+
+        {showRoutine && (
+          <form
+            onSubmit={submitRoutine}
+            className="mt-2 space-y-3 rounded-xl border border-gray-200 bg-white p-4"
+          >
+            <input
+              value={routineTitle}
+              onChange={(e) => setRoutineTitle(e.target.value)}
+              placeholder="반복할 할 일 제목"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              required
+            />
+
+            <select
+              value={routineCategory}
+              onChange={(e) => setRoutineCategory(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm sm:w-auto"
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+
+            <div className="flex flex-wrap gap-1.5">
+              {WEEKDAYS.map((day) => (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => toggleRoutineDay(day)}
+                  className={`h-8 w-8 rounded-full text-xs ${
+                    routineDays.includes(day) ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"
+                  }`}
+                >
+                  {day}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <label className="flex items-center gap-2 text-xs text-gray-500">
+                시작일
+                <input
+                  type="date"
+                  value={routineStart}
+                  onChange={(e) => setRoutineStart(e.target.value)}
+                  className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm"
+                  required
+                />
+              </label>
+              <label className="flex items-center gap-2 text-xs text-gray-500">
+                종료일
+                <input
+                  type="date"
+                  value={routineEnd}
+                  onChange={(e) => setRoutineEnd(e.target.value)}
+                  className="flex-1 rounded-lg border border-gray-300 px-2 py-2 text-sm"
+                  required
+                />
+              </label>
+            </div>
+
+            <textarea
+              value={routineNotes}
+              onChange={(e) => setRoutineNotes(e.target.value)}
+              placeholder="메모 (선택, 생성되는 모든 항목에 동일하게 적용)"
+              rows={2}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={routineBusy}
+                className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              >
+                {routineBusy ? "생성 중..." : "일괄 생성"}
+              </button>
+              {routineMessage && <span className="text-xs text-gray-500">{routineMessage}</span>}
+            </div>
+          </form>
+        )}
+      </div>
 
       {labels.length > 1 && (
         <div className="mb-3 flex flex-wrap gap-2">
