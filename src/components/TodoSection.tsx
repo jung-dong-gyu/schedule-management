@@ -25,6 +25,21 @@ const PRIORITY_TAG: Record<string, { label: string; className: string }> = {
   여유: { label: "Low", className: "bg-blue-100 text-blue-700" },
 };
 
+const PRIORITY_RANK: Record<string, number> = { 긴급: 0, 보통: 1, 여유: 2 };
+
+// 1순위 시간대(빠른 시간 먼저, 종일은 최하위) → 2순위 긴급도 → 3순위 제목 가나다순
+function compareTodos(a: Todo, b: Todo) {
+  const at = a.due_time ?? "24:00:00";
+  const bt = b.due_time ?? "24:00:00";
+  if (at !== bt) return at < bt ? -1 : 1;
+
+  const ap = PRIORITY_RANK[a.priority ?? "보통"] ?? 1;
+  const bp = PRIORITY_RANK[b.priority ?? "보통"] ?? 1;
+  if (ap !== bp) return ap - bp;
+
+  return a.title.localeCompare(b.title, "ko");
+}
+
 function todayStr() {
   const now = new Date();
   const y = now.getFullYear();
@@ -281,7 +296,8 @@ export default function TodoSection({ todayOnly = false }: { todayOnly?: boolean
     () => ["전체", ...Array.from(new Set(scoped.map((t) => t.category).filter(Boolean) as string[]))],
     [scoped]
   );
-  const visible = filter === "전체" ? scoped : scoped.filter((t) => t.category === filter);
+  const filtered = filter === "전체" ? scoped : scoped.filter((t) => t.category === filter);
+  const visible = todayOnly ? [...filtered].sort(compareTodos) : filtered;
 
   return (
     <section>
